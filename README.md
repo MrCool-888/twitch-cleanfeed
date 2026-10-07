@@ -1,10 +1,33 @@
-# Twitch Direct Session — version 1.1.0
+# Twitch Direct Session
+
+A browser userscript that tries to block Twitch ads while keeping stream quality high. Inspired by [twitch-patched](https://github.com/ryykitty/twitch-patched).
+
+**[Install the script](https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js)** · **[Download from Releases](https://github.com/MrCool-888/twitch-direct-session-browser/releases/latest)**
+
+## Get started
+
+1. Install a userscript extension such as **Violentmonkey**.
+2. Click **Install the script** above, then confirm installation in your extension.
+3. Disable other Twitch ad-blocking userscripts and refresh Twitch.
+
+If the link shows code, copy the entire file into a new Violentmonkey script and save it. When updating, replace all the old code. Updates must be installed manually.
+
+## What to expect
+
+- Tries to find an ad-free stream at the closest available quality.
+- Shows a status message when replacing ads or waiting for clean content.
+- If no clean stream is available, playback may pause or buffer. Some ads may still get through; this is experimental.
+
+Need help or want the technical details? Expand the guide below.
+
+<details>
+<summary><strong>Full guide: troubleshooting, settings, tests, and credits</strong></summary>
 
 [Install / download the userscript](https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js) · [License](./LICENSE) · [Attribution](./NOTICE)
 
 Browser adaptation of [ryykitty/twitch-patched](https://github.com/ryykitty/twitch-patched/tree/ac1d3cbe090a482a256219938e6b77211319c95b), with quality-aware direct playback and strict handling of detected stream ads.
 
-## Install the complete file
+### Install the complete file
 
 1. Open `twitch-direct-session.user.js` in Notepad and copy all its contents.
 2. Open the script in Violentmonkey's dashboard. Select all the old code with Ctrl+A, paste the complete new file, then save with Ctrl+S. Enable this installation and disable older copies or other Twitch playback-rewriting scripts.
@@ -14,13 +37,13 @@ Replace the entire source. A previously submitted saved copy combined old and re
 
 This script has no automatic update URL.
 
-## The actual backup-rejection bug
+### The actual backup-rejection bug
 
 Version 1.0.2 treated a generic `CLASS="twitch-trigger"` date-range marker as evidence of ads. A read-only probe of Dantes found this generic marker in all three alternate contexts, alongside eight live segments with known broadcast sequence numbers and no stitched-ad identifiers. The parser incorrectly rejected those playlists.
 
 Version 1.1.0 accepts the generic trigger. It continues to detect actual stitched-ad markers, Twitch ad attributes, ad segment titles/paths, and cue-out markers. After the fix, all three captured media playlists parse as supported live content. This verifies the parser correction, not an end-to-end browser ad break.
 
-## Strict mode is now the default
+### Strict mode is now the default
 
 When an ad is detected, the script first tries clean compatible direct streams. If those searches fail, it **withholds the detected ad playlist** and polls for clean content instead of returning the original ad playlist.
 
@@ -40,7 +63,7 @@ To restore strict mode, remove that setting and refresh:
 localStorage.removeItem('twitchDirect_allowNativeAds');
 ```
 
-## Quality and transport
+### Quality and transport
 
 - Direct backup sessions use `mobile_feed` on the Android platform and `popout` on the web platform. `autoplay` is probed alongside them as a last-resort candidate; a compatible full-quality source is preferred over it. This prevents slow source probes from consuming the entire search budget before autoplay is tried.
 - Resolution, frame rate, and codec matching guide selection. The native quality ladder remains intact; compatible lower quality may be used if full quality is unavailable. The script cannot force a rendition that Twitch does not supply.
@@ -51,7 +74,7 @@ localStorage.removeItem('twitchDirect_allowNativeAds');
 
 To disable the potentially low-quality autoplay candidate, set `twitchAdSolutions_preferLowQualityBackup` to `'false'` in Twitch's localStorage and refresh. To restore it, remove that key. This preference carries over from older custom scripts.
 
-## Status and diagnostics
+### Status and diagnostics
 
 In Twitch's F12 Console, select the **top** execution context and type:
 
@@ -65,7 +88,7 @@ The banner shows **checking replacement streams**, **ad playlist replaced** with
 
 If `twitchDirectStatus is not a function`, first verify version 1.1.0 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
 
-## Validation
+### Validation
 
 43 automated tests passed with Node.js 24. Coverage includes the generic-trigger regression, actual ad attributes, backup selection and deadlines, autoplay budget access, strict waiting and timeout/cancellation, unsupported ad playlists, native recovery, forward/stable HLS timelines, header capture, client-ad rechecks, whole-script startup, and generated-worker initialization.
 
@@ -78,10 +101,18 @@ node --check twitch-direct-session.user.js
 node --test test-direct-session.cjs
 ```
 
-## Attribution and license
+### Attribution and license
 
 Android adaptation source: `ryykitty/twitch-patched`, commit `ac1d3cbe090a482a256219938e6b77211319c95b`, especially `PlaylistSessions.java`, `AdRuntime.java`, `HlsPlaylist.java`, and `LiveWindow.java`.
 
 Browser transport derives from the supplied vaft v68.5.7 and local stability changes. The client-ad gate derives from [scamorza/TwitchAdBlock](https://github.com/scamorza/TwitchAdBlock/blob/a1453021869b43870e30fac4c384d09b60bef435/vaft.user.js), commit `a1453021869b43870e30fac4c384d09b60bef435`.
 
 GPL version 3 applies to this adaptation. Retain LICENSE, NOTICE, and TwitchAdBlock-MIT.txt when redistributing. The repository contains the unminified userscript source and runnable tests. This independent project is not endorsed by the upstream maintainers.
+
+</details>
+
+Licensed under [GPL-3.0](./LICENSE). Upstream credits and license notices are in [NOTICE](./NOTICE).
+
+## Vibe-coded disclaimer
+
+This project was built with AI assistance (“vibe coded”). It has automated tests, but real-world Twitch ad blocking has not been fully verified. Bugs, missed ads, lower quality, or buffering are possible. It is an independent project, not affiliated with Twitch or the upstream projects.
