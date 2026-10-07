@@ -1,7 +1,11 @@
 // ==UserScript==
 // @name         Twitch Direct Session - Android Method
 // @namespace    twitch-direct-session-browser-port
-// @version      1.1.0
+// @version      1.1.1
+// @downloadURL  https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js
+// @updateURL    https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js
+// @homepageURL  https://github.com/MrCool-888/twitch-direct-session-browser
+// @supportURL   https://github.com/MrCool-888/twitch-direct-session-browser/issues
 // @description  Browser adaptation of twitch-patched: Android playback contexts, warm backups, and a consistent broadcast timeline
 // @author       https://github.com/cleanlock/VideoAdBlockForTwitch#credits
 // @match        *://*.twitch.tv/*
@@ -61,7 +65,7 @@
         return;
     }
     window.twitchAdSolutionsVersion = ourTwitchAdSolutionsVersion;
-    const directAdStatus = { version: '1.1.0', playlist: 'waiting', clientAdGate: 'checking',
+    const directAdStatus = { version: '1.1.1', playlist: 'waiting', clientAdGate: 'checking',
         channel: null, context: null, resolution: null, frameRate: null, reason: null, updatedAt: null };
     let directAdBannerTimer = null;
     window.twitchDirectStatus = () => ({ ...directAdStatus, probes: { ...directAdStatus.probes } });

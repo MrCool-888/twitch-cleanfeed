@@ -10,7 +10,7 @@ A browser userscript that tries to block Twitch ads while keeping stream quality
 2. Click **Install the script** above, then confirm installation in your extension.
 3. Disable other Twitch ad-blocking userscripts and refresh Twitch.
 
-If the link shows code, copy the entire file into a new Violentmonkey script and save it. When updating, replace all the old code. Updates must be installed manually.
+If the link shows code, copy the entire file into a new Violentmonkey script and save it. Install version 1.1.1 once to enable link-based updates. Keep automatic updates enabled in Violentmonkey; it will check this same link for newer versions. You can also check for updates from its dashboard.
 
 ## What to expect
 
@@ -35,7 +35,7 @@ Browser adaptation of [ryykitty/twitch-patched](https://github.com/ryykitty/twit
 
 Replace the entire source. A previously submitted saved copy combined old and replacement lines, creating duplicate variable declarations and an unmatched brace; that prevented the script from starting. Copying the complete file avoids retaining those obsolete lines.
 
-This script has no automatic update URL.
+Version 1.1.1 adds explicit download and update URLs pointing to the script on this repository’s `main` branch. Install it once to give an older manually pasted copy those URLs. Keep automatic updates enabled in your userscript extension. Future published versions must increase `@version`; the extension checks periodically, so updates are not instant. [Violentmonkey’s update documentation](https://violentmonkey.github.io/api/metadata-block/#downloadurl).
 
 ### The actual backup-rejection bug
 
@@ -86,7 +86,7 @@ The result includes version, strict mode, playlist outcome, backup context/quali
 
 The banner shows **checking replacement streams**, **ad playlist replaced** with context and quality, or **ads withheld** while waiting. Under the optional native-ad policy, it may report **no clean replacement; native playback**. It hides when clean native playback returns or playlist updates stop. Selecting a clean playlist does not by itself prove that the video decoded successfully.
 
-If `twitchDirectStatus is not a function`, first verify version 1.1.0 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
+If `twitchDirectStatus is not a function`, first verify version 1.1.1 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
 
 ### Validation
 
