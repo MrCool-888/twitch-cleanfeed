@@ -100,7 +100,7 @@ In Twitch's F12 Console, select the **top** execution context and type:
 window.twitchCleanFeedStatus()
 ```
 
-The result includes version, strict mode, playlist outcome, backup context/quality, client-ad gate state, and per-context probe results. These diagnostics exclude tokens and signed media URLs. Probe states distinguish clean media, ads in the backup, no compatible rendition, unsupported media, missing live sequences, cooldowns, and token/master/media request failures. The old `window.twitchCleanFeedStatus()` name remains an alias for compatibility. The old `window.twitchDirectStatus()` name remains an alias for compatibility. Console messages beginning `[DIRECT]` give additional detail.
+The result includes version, strict mode, playlist outcome, backup context/quality, client-ad gate state, and per-context probe results. These diagnostics exclude tokens and signed media URLs. Probe states distinguish clean media, ads in the backup, no compatible rendition, unsupported media, missing live sequences, cooldowns, and token/master/media request failures. The old `window.twitchDirectStatus()` name remains an alias for compatibility. Console messages beginning `[DIRECT]` give additional detail.
 
 The banner shows **checking replacement streams**, **ad playlist replaced** with context and quality, or **ads withheld** while waiting. Under the optional native-ad policy, it may report **no clean replacement; native playback**. It hides when clean native playback returns or playlist updates stop. Selecting a clean playlist does not by itself prove that the video decoded successfully.
 
