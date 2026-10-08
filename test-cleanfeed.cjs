@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const { test } = require('node:test');
-const source = fs.readFileSync(path.join(__dirname, './twitch-direct-session.user.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, './twitch-cleanfeed.user.js'), 'utf8');
 function fn(name) {
     const start = source.search(new RegExp(`^    (?:async )?function ${name}\\(`, 'm'));
     assert(start >= 0, name);
@@ -323,7 +323,7 @@ function bannerSetup() {
     s.ctx.setTimeout = fn => { callbacks.set(++sequence, fn); return sequence; };
     s.ctx.clearTimeout = id => callbacks.delete(id);
     s.ctx.hideTwitchAdOverlays = () => hidden++;
-    vm.runInContext(['directBannerIsHidden', 'applyDirectBannerVisibility', 'closeDirectBannerMenu', 'ensureDirectBannerControls', 'updateAdblockBanner'].map(fn).join('\n'), s.ctx);
+    vm.runInContext(['directBannerIsHidden', 'applyDirectBannerVisibility', 'ensureDirectBannerControls', 'updateAdblockBanner'].map(fn).join('\n'), s.ctx);
     return { ...s, callbacks, notice: () => root.querySelector('.tas-adblock-overlay'), hidden: () => hidden };
 }
 

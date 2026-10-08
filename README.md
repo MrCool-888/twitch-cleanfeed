@@ -2,7 +2,7 @@
 
 A browser userscript that tries to block Twitch ads while keeping stream quality high. Inspired by [twitch-patched](https://github.com/ryykitty/twitch-patched).
 
-**[Install the script](https://raw.githubusercontent.com/MrCool-888/twitch-cleanfeed/main/twitch-direct-session.user.js)** · **[Download from Releases](https://github.com/MrCool-888/twitch-cleanfeed/releases/latest)**
+**[Install the script](https://raw.githubusercontent.com/MrCool-888/twitch-cleanfeed/main/twitch-cleanfeed.user.js)** · **[Download from Releases](https://github.com/MrCool-888/twitch-cleanfeed/releases/latest)**
 
 ## Get started
 
@@ -10,12 +10,12 @@ A browser userscript that tries to block Twitch ads while keeping stream quality
 2. Click **Install the script** above, then confirm installation in your extension.
 3. Disable other Twitch ad-blocking userscripts and refresh Twitch.
 
-Already using Twitch Direct Session? Choose **Check for updates** for the existing script in Violentmonkey, then refresh Twitch. It will become **Twitch CleanFeed v1.1.4**. Keep automatic updates enabled. If you install a new copy using the link instead, disable the old copy to avoid running both. If the link only shows code, replace the entire source of your existing script and save it.
+Already using Twitch Direct Session? Choose **Check for updates** for the existing script in Violentmonkey, then refresh Twitch. It will become **Twitch CleanFeed v1.1.5**. Keep automatic updates enabled. If you install a new copy using the link instead, disable the old copy to avoid running both. If the link only shows code, replace the entire source of your existing script and save it.
 
 ## What to expect
 
 - Tries to find an ad-free stream at the closest available quality.
-- Shows a status message when replacing ads or waiting for clean content. Click the small **CleanFeed** icon in the bottom-right player controls, then use **Ad status message — On/Off**; your choice is saved.
+- Shows a status message when replacing ads or waiting for clean content. Click the white **CleanFeed toggle** in the bottom-right player controls to show or hide it. No slash means **On**; a slash means **Off**. Your choice is saved.
 - If no clean stream is available, playback may pause or buffer. Some ads may still get through; this is experimental.
 
 Need help or want the technical details? Expand the guide below.
@@ -23,13 +23,13 @@ Need help or want the technical details? Expand the guide below.
 <details>
 <summary><strong>Full guide: troubleshooting, settings, tests, and credits</strong></summary>
 
-[Install / download the userscript](https://raw.githubusercontent.com/MrCool-888/twitch-cleanfeed/main/twitch-direct-session.user.js) · [License](./LICENSE) · [Attribution](./NOTICE)
+[Install / download the userscript](https://raw.githubusercontent.com/MrCool-888/twitch-cleanfeed/main/twitch-cleanfeed.user.js) · [License](./LICENSE) · [Attribution](./NOTICE)
 
 Browser adaptation of [ryykitty/twitch-patched](https://github.com/ryykitty/twitch-patched/tree/ac1d3cbe090a482a256219938e6b77211319c95b), with quality-aware direct playback and strict handling of detected stream ads.
 
 ### Install the complete file
 
-1. Open `twitch-direct-session.user.js` in Notepad and copy all its contents.
+1. Open `twitch-cleanfeed.user.js` in Notepad and copy all its contents.
 2. Open the script in Violentmonkey's dashboard. Select all the old code with Ctrl+A, paste the complete new file, then save with Ctrl+S. Enable this installation and disable older copies or other Twitch playback-rewriting scripts.
 3. Refresh Twitch. The script must run in the **page** context at **document start**; both settings are in its metadata. Remove any user override that selects `content` injection. For Violentmonkey Manifest V2, enable **Synchronous page mode** in advanced settings if available. See [Violentmonkey's injection documentation](https://violentmonkey.github.io/api/metadata-block/).
 
@@ -80,7 +80,7 @@ Replacement feeds can already be behind Twitch’s native feed. A total delay of
 
 After a clean ad replacement, gentle catch-up uses 1.05–1.08× playback when at least 3.5 seconds of contiguous video is buffered. It returns to normal speed at 2.5 seconds of buffered video, and stops on a stall, pause, seek, stale playback status, or channel change. It yields to other playback-speed controls and does not seek or reload the player. Catch-up can continue for up to 45 seconds after native playback returns. It respects an explicitly disabled Twitch low-latency setting.
 
-`window.twitchDirectStatus().catchUp` reports the controller state and `bufferedAheadSeconds`. That value measures playable buffer ahead of the current position, not the broadcaster delay shown by 7TV.
+`window.twitchCleanFeedStatus().catchUp` reports the controller state and `bufferedAheadSeconds`. That value measures playable buffer ahead of the current position, not the broadcaster delay shown by 7TV.
 
 To disable this script’s catch-up, run `localStorage.setItem('twitchDirect_catchUp', 'false')` on Twitch. Remove that key to enable it again.
 
@@ -88,33 +88,35 @@ Regression tests cover stale/non-advancing media refresh, cache bypass, playable
 
 ### Status and diagnostics
 
-Version 1.1.4 replaces the **Ad info** text button with a small white monitor/check icon that matches Twitch’s bottom-right player controls. Click **CleanFeed settings** to open a panel, then use the **Ad status message** switch. Its **On/Off** label, purple/gray track, and switch position show the saved setting. This controls only the top-left message; ad blocking stays active. Press Escape or click outside to close the panel. The setting survives refreshes and player/control replacements. Before the control row loads, the icon appears just above the bottom-right controls. Showing the message again does not revive an expired status.
+Version 1.1.5 makes the **CleanFeed toggle** in the bottom-right player controls show or hide the top-left status message immediately. There is no settings panel. The icon stays white: **no slash = On; slash = Off.** Hover text and the accessible button label also report On/Off. Enter or Space activates it. This changes only the message; ad blocking stays active. The setting survives refreshes and player/control replacements. Before the control row loads, the toggle appears just above the bottom-right controls. Turning it on does not revive an expired status.
 
-The project is now **Twitch CleanFeed**. The userscript filename, namespace, diagnostics function, and preference keys are retained for compatibility. Existing installation/update links redirect to this repository. To upgrade a previously installed copy, use Violentmonkey’s **Check for updates**. A fresh manual installation with the new name may create a second copy; disable the older script if you install that way. [Violentmonkey’s metadata documentation](https://violentmonkey.github.io/api/metadata-block/#name) explains installation identity.
+The canonical script and release asset are **`twitch-cleanfeed.user.js`**; tests are **`test-cleanfeed.cjs`**. `twitch-direct-session.user.js` is an identical compatibility copy for previously installed scripts checking the old update URL. Install only one copy. Both use the same name and namespace. New updates point to the CleanFeed filename. The namespace and preference keys retain their older internal names so existing installations and saved choices continue to work.
+
+To upgrade a previously installed copy, use Violentmonkey’s **Check for updates**. A fresh manual installation when changing from the old Twitch Direct Session name may create a second copy; disable the older script if you install that way. [Violentmonkey’s metadata documentation](https://violentmonkey.github.io/api/metadata-block/#name) explains installation identity.
 
 In Twitch's F12 Console, select the **top** execution context and type:
 
 ```js
-window.twitchDirectStatus()
+window.twitchCleanFeedStatus()
 ```
 
-The result includes version, strict mode, playlist outcome, backup context/quality, client-ad gate state, and per-context probe results. These diagnostics exclude tokens and signed media URLs. Probe states distinguish clean media, ads in the backup, no compatible rendition, unsupported media, missing live sequences, cooldowns, and token/master/media request failures. Console messages beginning `[DIRECT]` give additional detail.
+The result includes version, strict mode, playlist outcome, backup context/quality, client-ad gate state, and per-context probe results. These diagnostics exclude tokens and signed media URLs. Probe states distinguish clean media, ads in the backup, no compatible rendition, unsupported media, missing live sequences, cooldowns, and token/master/media request failures. The old `window.twitchCleanFeedStatus()` name remains an alias for compatibility. The old `window.twitchDirectStatus()` name remains an alias for compatibility. Console messages beginning `[DIRECT]` give additional detail.
 
 The banner shows **checking replacement streams**, **ad playlist replaced** with context and quality, or **ads withheld** while waiting. Under the optional native-ad policy, it may report **no clean replacement; native playback**. It hides when clean native playback returns or playlist updates stop. Selecting a clean playlist does not by itself prove that the video decoded successfully.
 
-If `twitchDirectStatus is not a function`, first verify version 1.1.4 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
+If `twitchCleanFeedStatus is not a function`, first verify version 1.1.5 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
 
 ### Validation
 
-52 automated tests passed with Node.js 24. The settings panel was also checked in a local browser player preview for mouse/keyboard operation, saved preferences, expired status, and player/control replacement. Live Twitch control layout remains unverified. Coverage includes the generic-trigger regression, actual ad attributes, backup selection and deadlines, autoplay budget access, strict waiting and timeout/cancellation, unsupported ad playlists, native recovery, forward/stable HLS timelines, header capture, client-ad rechecks, whole-script startup, and generated-worker initialization.
+52 automated tests passed with Node.js 24. The direct toggle was also checked in a local browser player preview for mouse/keyboard operation, saved preferences, expired status, and player/control replacement. Live Twitch control layout remains unverified. Coverage includes the generic-trigger regression, actual ad attributes, backup selection and deadlines, autoplay budget access, strict waiting and timeout/cancellation, unsupported ad playlists, native recovery, forward/stable HLS timelines, header capture, client-ad rechecks, whole-script startup, and generated-worker initialization.
 
 Read-only network requests obtained HTTP 200 token, master, and media responses for Dantes in all three contexts. The sampled renditions were 284x160 (`mobile_feed`), 1280x720 (`popout`), and 640x360 (`autoplay`); these samples are not claims about the full available quality ladders. The fixed parser accepted each captured playlist. No video segments were downloaded, and actual browser playback/ad-break success remains unverified.
 
 Run the repository tests with Node.js:
 
 ```text
-node --check twitch-direct-session.user.js
-node --test test-direct-session.cjs
+node --check twitch-cleanfeed.user.js
+node --test test-cleanfeed.cjs
 ```
 
 ### Attribution and license
