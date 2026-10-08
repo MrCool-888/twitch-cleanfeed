@@ -10,12 +10,12 @@ A browser userscript that tries to block Twitch ads while keeping stream quality
 2. Click **Install the script** above, then confirm installation in your extension.
 3. Disable other Twitch ad-blocking userscripts and refresh Twitch.
 
-If the link shows code, copy the entire file into a new Violentmonkey script and save it. Install version 1.1.2 once to enable link-based updates. Keep automatic updates enabled in Violentmonkey; it will check this same link for newer versions. You can also check for updates from its dashboard.
+If the link shows code, copy the entire file into a new Violentmonkey script and save it. Install version 1.1.3 once to enable link-based updates. Keep automatic updates enabled in Violentmonkey; it will check this same link for newer versions. You can also check for updates from its dashboard.
 
 ## What to expect
 
 - Tries to find an ad-free stream at the closest available quality.
-- Shows a status message when replacing ads or waiting for clean content.
+- Shows a status message when replacing ads or waiting for clean content. Use **Ad info** at the bottom right of the player to show or hide it; your choice is saved.
 - If no clean stream is available, playback may pause or buffer. Some ads may still get through; this is experimental.
 
 Need help or want the technical details? Expand the guide below.
@@ -88,6 +88,8 @@ Regression tests cover stale/non-advancing media refresh, cache bypass, playable
 
 ### Status and diagnostics
 
+Version 1.1.3 adds an **Ad info** button in the player’s bottom-right controls. It toggles the top-left status message without changing ad blocking, saves the choice across refreshes, and reattaches when Twitch replaces the player controls. Before the control row loads, it appears just above the bottom-right controls. Showing the message again does not revive an expired status.
+
 In Twitch's F12 Console, select the **top** execution context and type:
 
 ```js
@@ -98,7 +100,7 @@ The result includes version, strict mode, playlist outcome, backup context/quali
 
 The banner shows **checking replacement streams**, **ad playlist replaced** with context and quality, or **ads withheld** while waiting. Under the optional native-ad policy, it may report **no clean replacement; native playback**. It hides when clean native playback returns or playlist updates stop. Selecting a clean playlist does not by itself prove that the video decoded successfully.
 
-If `twitchDirectStatus is not a function`, first verify version 1.1.2 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
+If `twitchDirectStatus is not a function`, first verify version 1.1.3 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
 
 ### Validation
 

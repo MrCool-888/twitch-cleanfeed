@@ -304,15 +304,17 @@ test('a late preroll search cannot overwrite newer native playback or status', a
 });
 
 function bannerSetup() {
-    const s = setup(), callbacks = new Map(); let sequence = 0, notice = null, hidden = 0;
+    const s = setup(), callbacks = new Map(), children = []; let sequence = 0, hidden = 0;
     s.ctx.directAdBannerTimer = null;
-    s.ctx.cachedPlayerRootDiv = { isConnected: true, querySelector: () => notice, appendChild: node => { notice = node; } };
-    s.ctx.document = { createElement: () => ({ style: {} }) };
+    const root = { isConnected: true, querySelector: selector => children.find(node => '.' + node.className === selector) || null,
+        appendChild: node => { children.push(node); node.parentNode = root; } };
+    s.ctx.cachedPlayerRootDiv = root;
+    s.ctx.document = { createElement: () => ({ style: {}, dataset: {}, addEventListener() {}, setAttribute() {} }) };
     s.ctx.setTimeout = fn => { callbacks.set(++sequence, fn); return sequence; };
     s.ctx.clearTimeout = id => callbacks.delete(id);
     s.ctx.hideTwitchAdOverlays = () => hidden++;
-    vm.runInContext(fn('updateAdblockBanner'), s.ctx);
-    return { ...s, callbacks, notice: () => notice, hidden: () => hidden };
+    vm.runInContext(['directBannerIsHidden', 'applyDirectBannerVisibility', 'ensureDirectBannerControls', 'updateAdblockBanner'].map(fn).join('\n'), s.ctx);
+    return { ...s, callbacks, notice: () => root.querySelector('.tas-adblock-overlay'), hidden: () => hidden };
 }
 
 test('banner distinguishes searching, actual playlist replacement, and native fallback', () => {

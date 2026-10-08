@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitch Direct Session - Android Method
 // @namespace    twitch-direct-session-browser-port
-// @version      1.1.2
+// @version      1.1.3
 // @downloadURL  https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js
 // @updateURL    https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js
 // @homepageURL  https://github.com/MrCool-888/twitch-direct-session-browser
@@ -65,7 +65,7 @@
         return;
     }
     window.twitchAdSolutionsVersion = ourTwitchAdSolutionsVersion;
-    const directAdStatus = { version: '1.1.2', playlist: 'waiting', clientAdGate: 'checking',
+    const directAdStatus = { version: '1.1.3', playlist: 'waiting', clientAdGate: 'checking',
         channel: null, context: null, resolution: null, frameRate: null, reason: null, updatedAt: null };
     let directAdBannerTimer = null;
     window.twitchDirectStatus = () => ({ ...directAdStatus, probes: { ...directAdStatus.probes } });
@@ -1262,6 +1262,75 @@
         window.addEventListener('pagehide', () => controller.stop());
     }
 
+    function directBannerIsHidden() {
+        if (typeof directBannerIsHidden.value !== 'boolean') {
+            try { directBannerIsHidden.value = localStorage.getItem('twitchDirect_hideAdStatus') === 'true'; }
+            catch { directBannerIsHidden.value = false; }
+        }
+        return directBannerIsHidden.value;
+    }
+    function applyDirectBannerVisibility(root) {
+        const hidden = directBannerIsHidden();
+        const notice = root.querySelector('.tas-adblock-overlay');
+        if (notice) notice.style.display = !hidden && notice.dataset.active === 'true' ? 'block' : 'none';
+        const button = root.querySelector('.tas-ad-status-toggle');
+        if (button) {
+            const label = (hidden ? 'Show' : 'Hide') + ' ad status message';
+            button.setAttribute('aria-label', label);
+            button.setAttribute('aria-pressed', String(!hidden));
+            button.title = label;
+        }
+        directAdStatus.bannerVisible = !hidden;
+    }
+    function ensureDirectBannerControls(root) {
+        let button = root.querySelector('.tas-ad-status-toggle');
+        if (!button) {
+            button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'tas-ad-status-toggle';
+            button.textContent = 'Ad info';
+            button.style.cssText = 'z-index:20;color:white;background:rgba(0,0,0,.65);border:0;border-radius:4px;padding:6px 8px;font:600 12px/20px sans-serif;cursor:pointer;pointer-events:auto;white-space:nowrap;flex-shrink:0';
+            button.addEventListener('click', event => {
+                event.preventDefault(); event.stopPropagation();
+                directBannerIsHidden.value = !directBannerIsHidden();
+                try { localStorage.setItem('twitchDirect_hideAdStatus', String(directBannerIsHidden.value)); } catch {}
+                applyDirectBannerVisibility(root);
+            });
+            // Avoid the player's click/keyboard shortcuts while operating this
+            // button. Native Enter/Space activation and focus styling remain.
+            for (const event of ['pointerdown', 'dblclick', 'keydown', 'keyup']) {
+                button.addEventListener(event, e => e.stopPropagation());
+            }
+            root.appendChild(button);
+        }
+        const controls = root.querySelector('.player-controls__right-control-group') ||
+            root.querySelector('[data-a-target="player-controls-right"]');
+        if (controls) {
+            button.style.position = 'relative'; button.style.bottom = ''; button.style.right = '';
+            button.style.marginRight = '8px';
+            if (button.parentNode !== controls) controls.insertBefore(button, controls.firstChild);
+        } else {
+            // Until Twitch renders its control row, stay just above that row so
+            // the toggle never covers the fullscreen/volume controls.
+            button.style.position = 'absolute'; button.style.bottom = '56px'; button.style.right = '12px';
+            button.style.marginRight = '';
+            if (button.parentNode !== root) root.appendChild(button);
+        }
+        applyDirectBannerVisibility(root);
+    }
+    function startDirectBannerControls() {
+        const attach = () => {
+            try {
+                const root = document.querySelector('.video-player');
+                if (root) ensureDirectBannerControls(root);
+            } catch {}
+        };
+        attach();
+        // React can replace the player or its controls on channel navigation.
+        // Reattach one button without depending on private React internals.
+        setInterval(attach, 1000);
+    }
+
     // Core ad-blocking logic: detect ads in m3u8, fetch backup streams, strip ad segments
     function directSessionIsActive(info) {
         return StreamInfos[info.ChannelName] === info && Date.now() - info.LastSeenAt < 12000;
@@ -1638,6 +1707,7 @@
         }
         const root = cachedPlayerRootDiv;
         if (!root) return;
+        ensureDirectBannerControls(root);
         let notice = root.querySelector('.tas-adblock-overlay');
         if (!notice) {
             notice = document.createElement('div');
@@ -1654,12 +1724,14 @@
             unsupported: data.strict ? 'Ad detected — unsafe playlist withheld' : 'Ad detected — unsupported playlist; native playback'
         };
         notice.textContent = labels[data.status] || '';
-        notice.style.display = data.hasAds && labels[data.status] ? 'block' : 'none';
+        notice.dataset.active = data.hasAds && labels[data.status] ? 'true' : 'false';
+        applyDirectBannerVisibility(root);
         // Selecting a clean playlist is observable; successful video rendering
         // or a separate client-side ad is not proved by that selection.
         isActivelyStrippingAds = false;
         if (data.status === 'replaced') hideTwitchAdOverlays();
         directAdBannerTimer = setTimeout(() => {
+            notice.dataset.active = 'false';
             notice.style.display = 'none';
             directAdStatus.playlist = 'stale';
             directAdStatus.context = null;
@@ -2336,6 +2408,7 @@
     }, 'open');
     startBrowserClientAdBlock();
     startDirectLatencyControl();
+    startDirectBannerControls();
     if (document.readyState === "complete" || document.readyState === "interactive") {
         onContentLoaded();
     } else {
