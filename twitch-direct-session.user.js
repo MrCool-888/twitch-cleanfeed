@@ -1,11 +1,11 @@
 // ==UserScript==
-// @name         Twitch Direct Session - Android Method
+// @name         Twitch CleanFeed
 // @namespace    twitch-direct-session-browser-port
-// @version      1.1.3
-// @downloadURL  https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js
-// @updateURL    https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js
-// @homepageURL  https://github.com/MrCool-888/twitch-direct-session-browser
-// @supportURL   https://github.com/MrCool-888/twitch-direct-session-browser/issues
+// @version      1.1.4
+// @downloadURL  https://raw.githubusercontent.com/MrCool-888/twitch-cleanfeed/main/twitch-direct-session.user.js
+// @updateURL    https://raw.githubusercontent.com/MrCool-888/twitch-cleanfeed/main/twitch-direct-session.user.js
+// @homepageURL  https://github.com/MrCool-888/twitch-cleanfeed
+// @supportURL   https://github.com/MrCool-888/twitch-cleanfeed/issues
 // @description  Browser adaptation of twitch-patched: Android playback contexts, warm backups, and a consistent broadcast timeline
 // @author       https://github.com/cleanlock/VideoAdBlockForTwitch#credits
 // @match        *://*.twitch.tv/*
@@ -65,7 +65,7 @@
         return;
     }
     window.twitchAdSolutionsVersion = ourTwitchAdSolutionsVersion;
-    const directAdStatus = { version: '1.1.3', playlist: 'waiting', clientAdGate: 'checking',
+    const directAdStatus = { version: '1.1.4', playlist: 'waiting', clientAdGate: 'checking',
         channel: null, context: null, resolution: null, frameRate: null, reason: null, updatedAt: null };
     let directAdBannerTimer = null;
     window.twitchDirectStatus = () => ({ ...directAdStatus, probes: { ...directAdStatus.probes } });
@@ -1273,45 +1273,118 @@
         const hidden = directBannerIsHidden();
         const notice = root.querySelector('.tas-adblock-overlay');
         if (notice) notice.style.display = !hidden && notice.dataset.active === 'true' ? 'block' : 'none';
-        const button = root.querySelector('.tas-ad-status-toggle');
-        if (button) {
-            const label = (hidden ? 'Show' : 'Hide') + ' ad status message';
-            button.setAttribute('aria-label', label);
-            button.setAttribute('aria-pressed', String(!hidden));
-            button.title = label;
-        }
+        const toggle = root.querySelector('.tas-cleanfeed-switch');
+        if (toggle) toggle.setAttribute('aria-checked', String(!hidden));
+        const state = root.querySelector('.tas-cleanfeed-state');
+        if (state) state.textContent = hidden ? 'Off' : 'On';
         directAdStatus.bannerVisible = !hidden;
     }
+    function closeDirectBannerMenu(root, restoreFocus) {
+        const menu = root.querySelector('.tas-cleanfeed-menu');
+        const button = root.querySelector('.tas-ad-status-toggle');
+        if (menu) menu.hidden = true;
+        if (button) {
+            button.setAttribute('aria-expanded', 'false');
+            if (restoreFocus) button.focus();
+        }
+    }
     function ensureDirectBannerControls(root) {
-        let button = root.querySelector('.tas-ad-status-toggle');
-        if (!button) {
-            button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'tas-ad-status-toggle';
-            button.textContent = 'Ad info';
-            button.style.cssText = 'z-index:20;color:white;background:rgba(0,0,0,.65);border:0;border-radius:4px;padding:6px 8px;font:600 12px/20px sans-serif;cursor:pointer;pointer-events:auto;white-space:nowrap;flex-shrink:0';
-            button.addEventListener('click', event => {
+        if (!root.querySelector('.tas-cleanfeed-style')) {
+            const style = document.createElement('style');
+            style.className = 'tas-cleanfeed-style';
+            style.textContent = `
+                .tas-ad-status-toggle{z-index:20;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;min-width:32px;color:#efeff1;background:transparent;border:0;border-radius:4px;padding:4px;cursor:pointer;pointer-events:auto;flex-shrink:0}
+                .tas-ad-status-toggle:hover,.tas-ad-status-toggle[aria-expanded="true"]{background:rgba(255,255,255,.2)}
+                .tas-ad-status-toggle:focus-visible,.tas-cleanfeed-switch:focus-visible{outline:2px solid #bf94ff;outline-offset:2px}
+                .tas-ad-status-toggle svg{width:24px;height:24px;display:block}
+                .tas-cleanfeed-menu{position:absolute;z-index:30;right:12px;bottom:52px;width:260px;max-width:calc(100% - 24px);box-sizing:border-box;padding:14px;color:#efeff1;background:#18181b;border:1px solid #ffffff24;border-radius:6px;box-shadow:0 4px 20px #0008;font:14px/20px sans-serif;pointer-events:auto}
+                .tas-cleanfeed-menu[hidden]{display:none}
+                .tas-cleanfeed-heading{font-weight:600;margin:0 0 12px}
+                .tas-cleanfeed-row{display:flex;align-items:center;gap:10px}
+                .tas-cleanfeed-label{flex:1}
+                .tas-cleanfeed-state{min-width:22px;color:#adadb8;font-size:12px}
+                .tas-cleanfeed-switch{position:relative;flex-shrink:0;width:40px;height:22px;padding:0;border:0;border-radius:12px;background:#53535f;cursor:pointer}
+                .tas-cleanfeed-switch[aria-checked="true"]{background:#9147ff}
+                .tas-cleanfeed-knob{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .12s}
+                .tas-cleanfeed-switch[aria-checked="true"] .tas-cleanfeed-knob{transform:translateX(18px)}
+                .tas-cleanfeed-hint{margin:12px 0 0;color:#adadb8;font-size:12px;line-height:17px}
+                @media(prefers-reduced-motion:reduce){.tas-cleanfeed-knob{transition:none}}
+            `;
+            root.appendChild(style);
+        }
+        let menu = root.querySelector('.tas-cleanfeed-menu');
+        if (!menu) {
+            menu = document.createElement('div');
+            menu.className = 'tas-cleanfeed-menu'; menu.hidden = true;
+            menu.setAttribute('role', 'dialog'); menu.setAttribute('aria-label', 'Twitch CleanFeed');
+            const heading = document.createElement('div');
+            heading.className = 'tas-cleanfeed-heading'; heading.textContent = 'Twitch CleanFeed';
+            const row = document.createElement('div'); row.className = 'tas-cleanfeed-row';
+            const label = document.createElement('span');
+            label.className = 'tas-cleanfeed-label'; label.textContent = 'Ad status message';
+            const state = document.createElement('span'); state.className = 'tas-cleanfeed-state';
+            state.setAttribute('aria-hidden', 'true');
+            const toggle = document.createElement('button');
+            toggle.type = 'button'; toggle.className = 'tas-cleanfeed-switch';
+            toggle.setAttribute('role', 'switch'); toggle.setAttribute('aria-label', 'Ad status message');
+            const knob = document.createElement('span'); knob.className = 'tas-cleanfeed-knob';
+            knob.setAttribute('aria-hidden', 'true'); toggle.appendChild(knob);
+            toggle.addEventListener('click', event => {
                 event.preventDefault(); event.stopPropagation();
                 directBannerIsHidden.value = !directBannerIsHidden();
                 try { localStorage.setItem('twitchDirect_hideAdStatus', String(directBannerIsHidden.value)); } catch {}
                 applyDirectBannerVisibility(root);
             });
-            // Avoid the player's click/keyboard shortcuts while operating this
-            // button. Native Enter/Space activation and focus styling remain.
-            for (const event of ['pointerdown', 'dblclick', 'keydown', 'keyup']) {
-                button.addEventListener(event, e => e.stopPropagation());
+            row.appendChild(label); row.appendChild(state); row.appendChild(toggle);
+            const hint = document.createElement('p'); hint.className = 'tas-cleanfeed-hint';
+            hint.textContent = 'Shows or hides the top-left message. Ad blocking stays active.';
+            menu.appendChild(heading); menu.appendChild(row); menu.appendChild(hint);
+            for (const event of ['click', 'pointerdown', 'dblclick', 'keydown', 'keyup']) {
+                menu.addEventListener(event, e => {
+                    e.stopPropagation();
+                    if (e.type === 'keydown' && e.key === 'Escape') {
+                        e.preventDefault(); closeDirectBannerMenu(root, true);
+                    }
+                });
             }
-            root.appendChild(button);
+            menu.addEventListener('focusout', e => {
+                if (e.relatedTarget && !menu.contains(e.relatedTarget) &&
+                    e.relatedTarget !== root.querySelector('.tas-ad-status-toggle')) closeDirectBannerMenu(root, false);
+            });
+            root.appendChild(menu);
+        }
+        let button = root.querySelector('.tas-ad-status-toggle');
+        if (!button) {
+            button = document.createElement('button');
+            button.type = 'button'; button.className = 'tas-ad-status-toggle'; button.title = 'CleanFeed settings';
+            button.setAttribute('aria-label', 'CleanFeed settings');
+            button.setAttribute('aria-haspopup', 'dialog'); button.setAttribute('aria-expanded', 'false');
+            // Static, local SVG: a stream display with a check mark.
+            button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="1" stroke="currentColor" stroke-width="2"/><path d="m8 10 3 3 5-5M9 21h6M12 17v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+            button.addEventListener('click', event => {
+                event.preventDefault(); event.stopPropagation();
+                menu.hidden = !menu.hidden;
+                button.setAttribute('aria-expanded', String(!menu.hidden));
+                applyDirectBannerVisibility(root);
+                if (!menu.hidden) menu.querySelector('.tas-cleanfeed-switch').focus();
+            });
+            for (const event of ['pointerdown', 'dblclick', 'keydown', 'keyup']) {
+                button.addEventListener(event, e => {
+                    e.stopPropagation();
+                    if (e.type === 'keydown' && e.key === 'Escape') {
+                        e.preventDefault(); closeDirectBannerMenu(root, true);
+                    }
+                });
+            }
+            root.appendChild(button); closeDirectBannerMenu(root, false);
         }
         const controls = root.querySelector('.player-controls__right-control-group') ||
             root.querySelector('[data-a-target="player-controls-right"]');
         if (controls) {
             button.style.position = 'relative'; button.style.bottom = ''; button.style.right = '';
-            button.style.marginRight = '8px';
+            button.style.marginRight = '0';
             if (button.parentNode !== controls) controls.insertBefore(button, controls.firstChild);
         } else {
-            // Until Twitch renders its control row, stay just above that row so
-            // the toggle never covers the fullscreen/volume controls.
             button.style.position = 'absolute'; button.style.bottom = '56px'; button.style.right = '12px';
             button.style.marginRight = '';
             if (button.parentNode !== root) root.appendChild(button);
@@ -1326,8 +1399,16 @@
             } catch {}
         };
         attach();
+        // One document listener closes the current panel without retaining old players.
+        document.addEventListener('pointerdown', event => {
+            const root = document.querySelector('.video-player');
+            if (!root) return;
+            const menu = root.querySelector('.tas-cleanfeed-menu');
+            const button = root.querySelector('.tas-ad-status-toggle');
+            if (menu && !menu.hidden && !menu.contains(event.target) &&
+                !(button && button.contains(event.target))) closeDirectBannerMenu(root, false);
+        });
         // React can replace the player or its controls on channel navigation.
-        // Reattach one button without depending on private React internals.
         setInterval(attach, 1000);
     }
 

@@ -304,16 +304,26 @@ test('a late preroll search cannot overwrite newer native playback or status', a
 });
 
 function bannerSetup() {
-    const s = setup(), callbacks = new Map(), children = []; let sequence = 0, hidden = 0;
+    const s = setup(), callbacks = new Map(); let sequence = 0, hidden = 0;
     s.ctx.directAdBannerTimer = null;
-    const root = { isConnected: true, querySelector: selector => children.find(node => '.' + node.className === selector) || null,
-        appendChild: node => { children.push(node); node.parentNode = root; } };
+    function element() {
+        return { isConnected: true, style: {}, dataset: {}, children: [], addEventListener() {}, setAttribute() {},
+            appendChild(node) { this.children.push(node); node.parentNode = this; },
+            querySelector(selector) {
+                for (const child of this.children) {
+                    if ('.' + child.className === selector) return child;
+                    const match = child.querySelector(selector); if (match) return match;
+                }
+                return null;
+            } };
+    }
+    const root = element();
     s.ctx.cachedPlayerRootDiv = root;
-    s.ctx.document = { createElement: () => ({ style: {}, dataset: {}, addEventListener() {}, setAttribute() {} }) };
+    s.ctx.document = { createElement: element };
     s.ctx.setTimeout = fn => { callbacks.set(++sequence, fn); return sequence; };
     s.ctx.clearTimeout = id => callbacks.delete(id);
     s.ctx.hideTwitchAdOverlays = () => hidden++;
-    vm.runInContext(['directBannerIsHidden', 'applyDirectBannerVisibility', 'ensureDirectBannerControls', 'updateAdblockBanner'].map(fn).join('\n'), s.ctx);
+    vm.runInContext(['directBannerIsHidden', 'applyDirectBannerVisibility', 'closeDirectBannerMenu', 'ensureDirectBannerControls', 'updateAdblockBanner'].map(fn).join('\n'), s.ctx);
     return { ...s, callbacks, notice: () => root.querySelector('.tas-adblock-overlay'), hidden: () => hidden };
 }
 
@@ -461,7 +471,7 @@ test('the complete userscript starts in a browser-like page with no deleted-help
     const s = setup();
     const storage = new Map();
     s.ctx.localStorage = { getItem: k => storage.get(k) ?? null, setItem: (k,v) => storage.set(k,v), removeItem: k => storage.delete(k) };
-    s.ctx.document = { location: { hostname: 'www.twitch.tv', pathname: '/test' }, readyState: 'loading' };
+    s.ctx.document = { location: { hostname: 'www.twitch.tv', pathname: '/test' }, readyState: 'loading', addEventListener() {} };
     s.ctx.frameElement = null;
     s.ctx.XMLHttpRequest = class { open() {} };
     s.ctx.Worker = class Worker {};
