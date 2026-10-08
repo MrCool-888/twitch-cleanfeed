@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitch Direct Session - Android Method
 // @namespace    twitch-direct-session-browser-port
-// @version      1.1.1
+// @version      1.1.2
 // @downloadURL  https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js
 // @updateURL    https://raw.githubusercontent.com/MrCool-888/twitch-direct-session-browser/main/twitch-direct-session.user.js
 // @homepageURL  https://github.com/MrCool-888/twitch-direct-session-browser
@@ -65,7 +65,7 @@
         return;
     }
     window.twitchAdSolutionsVersion = ourTwitchAdSolutionsVersion;
-    const directAdStatus = { version: '1.1.1', playlist: 'waiting', clientAdGate: 'checking',
+    const directAdStatus = { version: '1.1.2', playlist: 'waiting', clientAdGate: 'checking',
         channel: null, context: null, resolution: null, frameRate: null, reason: null, updatedAt: null };
     let directAdBannerTimer = null;
     window.twitchDirectStatus = () => ({ ...directAdStatus, probes: { ...directAdStatus.probes } });
@@ -747,7 +747,7 @@
         });
         try {
             return await Promise.race([(async () => {
-                const response = await realFetch(url, { ...requestOptions, signal: controller.signal });
+                const response = await realFetch(url, { ...requestOptions, cache: 'no-store', signal: controller.signal });
                 if (!response.ok) throw new Error('Backup HTTP ' + response.status);
                 return await response.text();
             })(), timeout]);
@@ -1188,6 +1188,80 @@
         attempt();
     }
 
+    function createDirectLatencyController({ getVideo, getStatus, getChannel, enabled, now = Date.now }) {
+        let video = null, ownedRate = null, lastReplacement = -Infinity, channel = null, yieldUntil = 0;
+        const events = ['pause', 'waiting', 'seeking', 'ended', 'emptied'];
+        const restore = () => {
+            if (video && ownedRate !== null && Math.abs(video.playbackRate - ownedRate) < 0.001) video.playbackRate = 1;
+            ownedRate = null;
+        };
+        const onInterrupt = () => { restore(); yieldUntil = now() + 5000; };
+        const stop = () => {
+            restore();
+            for (const event of events) video?.removeEventListener(event, onInterrupt);
+            video = null;
+        };
+        const tick = () => {
+            const time = now(), status = getStatus(), currentChannel = getChannel();
+            const setStatus = (reason, ahead = null) => {
+                status.catchUp = { active: ownedRate !== null, rate: ownedRate || 1,
+                    bufferedAheadSeconds: ahead === null ? null : Math.round(ahead * 10) / 10, reason };
+            };
+            if (channel !== currentChannel) {
+                stop(); channel = currentChannel; lastReplacement = -Infinity; yieldUntil = 0;
+            }
+            const age = time - status.updatedAt;
+            const fresh = Number.isFinite(age) && age >= 0 && age <= 8000 && status.channel === channel;
+            if (fresh && status.playlist === 'replaced') lastReplacement = time;
+            const nextVideo = getVideo();
+            if (video !== nextVideo) {
+                stop(); video = nextVideo;
+                for (const event of events) video?.addEventListener(event, onInterrupt);
+            }
+            if (!enabled() || !fresh || !['replaced', 'native'].includes(status.playlist) || time - lastReplacement > 45000) {
+                restore(); setStatus('inactive'); return;
+            }
+            if (!video || video.paused || video.seeking || video.ended || video.error || video.readyState < 3) {
+                restore(); setStatus('player-not-ready'); return;
+            }
+            // Cooperate with Twitch, 7TV, and manual speed controls. Only restore
+            // a rate this controller still owns, and yield after another change.
+            if (ownedRate !== null && Math.abs(video.playbackRate - ownedRate) >= 0.001) {
+                ownedRate = null; yieldUntil = time + 30000;
+            }
+            if (time < yieldUntil || (ownedRate === null && Math.abs(video.playbackRate - 1) >= 0.001)) {
+                setStatus('other-speed-control'); return;
+            }
+            let ahead = 0;
+            for (let i = 0; i < video.buffered.length; i++) {
+                // A later disjoint range is not playable buffer. Never seek or
+                // speed toward it across a gap.
+                if (video.currentTime >= video.buffered.start(i) && video.currentTime < video.buffered.end(i)) {
+                    ahead = video.buffered.end(i) - video.currentTime; break;
+                }
+            }
+            if (!Number.isFinite(ahead) || ahead <= 2.5) {
+                restore(); setStatus('buffer-reserve', ahead); return;
+            }
+            if (ownedRate === null && ahead < 3.5) { setStatus('near-buffered-edge', ahead); return; }
+            ownedRate = ahead >= 5 ? 1.08 : 1.05;
+            video.playbackRate = ownedRate;
+            setStatus('catching-up', ahead);
+        };
+        return { tick, stop };
+    }
+    function startDirectLatencyControl() {
+        const controller = createDirectLatencyController({
+            getVideo: () => document.querySelector('.video-player video:not([data-tas-ad-hidden])'),
+            getStatus: () => directAdStatus,
+            getChannel: () => document.location.pathname.split('/')[1]?.toLowerCase() || null,
+            enabled: () => { try { return localStorage.getItem('twitchDirect_catchUp') !== 'false' &&
+                localStorage.getItem('lowLatencyModeEnabled') !== 'false'; } catch { return true; } }
+        });
+        setInterval(() => { try { controller.tick(); } catch { controller.stop(); } }, 1000);
+        window.addEventListener('pagehide', () => controller.stop());
+    }
+
     // Core ad-blocking logic: detect ads in m3u8, fetch backup streams, strip ad segments
     function directSessionIsActive(info) {
         return StreamInfos[info.ChannelName] === info && Date.now() - info.LastSeenAt < 12000;
@@ -1304,7 +1378,12 @@
             reportDirectAdStatus(info, target, 'searching');
             const key = target.Resolution + '/' + target.FrameRate + '/' + videoCodecFamily(target.Codecs);
             const warm = info.DirectSnapshots[key];
-            if (warm && Date.now() - warm.observed <= 8000) {
+            // Warm sessions save token/master setup. Their media must be recent
+            // and advance the broadcast edge; an old non-advancing snapshot
+            // must not suppress a foreground refresh for another eight seconds.
+            const warmAge = warm ? Date.now() - warm.observed : Infinity;
+            if (warm && warmAge >= 0 && warmAge <= 750 && warm.backup.playlist.segments.some(segment =>
+                segment.liveSequence !== null && (lane.window.lastLive === null || segment.liveSequence > lane.window.lastLive))) {
                 backupUsed = lane.window.acceptCleanBackup(warm.backup.playlist, warm.backup.type);
                 if (backupUsed) { lane.lastType = warm.backup.type; lane.lastVariant = warm.backup.variant; }
             }
@@ -2256,6 +2335,7 @@
         return realXHROpen.apply(this, arguments);
     }, 'open');
     startBrowserClientAdBlock();
+    startDirectLatencyControl();
     if (document.readyState === "complete" || document.readyState === "interactive") {
         onContentLoaded();
     } else {

@@ -467,10 +467,106 @@ test('the complete userscript starts in a browser-like page with no deleted-help
     s.ctx.fetch = async () => new Response('{}');
     s.ctx.addEventListener = () => {};
     s.ctx.setTimeout = () => 1;
+    s.ctx.setInterval = () => 1;
     vm.runInContext(source, s.ctx);
     assert.equal(s.ctx.twitchAdSolutionsVersion, 95);
     assert.equal(typeof s.ctx.reloadTwitchPlayer, 'function');
     const installedFetch = s.ctx.fetch;
     vm.runInContext(source, s.ctx);
     assert.equal(s.ctx.fetch, installedFetch);
+});
+
+test('an aged warm playlist cannot suppress a fresh foreground media request', async () => {
+    const s = setup({ mobile_feed: { clean: true, seq: 120 } });
+    // Use the implementation's codec family to avoid fixture assumptions.
+    const actualKey = target.Resolution + '/' + target.FrameRate + '/' + s.ctx.videoCodecFamily(target.Codecs);
+    s.info.DirectSnapshots[actualKey] = { observed: Date.now() - 3000,
+        backup: { type: 'mobile_feed', variant: target, playlist: s.hls.parse(live(100, 'stale', 14), BASE) } };
+    const output = await s.ctx.processM3U8(BASE, AD, s.realFetch);
+    assert(s.requests.some(url => url.includes('/mobile_feed/')));
+    assert(output.includes('mobile_feed120.ts'));
+    assert(!output.includes('stale100.ts'));
+});
+test('a recent warm playlist without a newer segment still refreshes media', async () => {
+    const s = setup({ mobile_feed: { clean: true, seq: 120 } });
+    await s.ctx.processM3U8(BASE, live(100, 'main', 14), s.realFetch);
+    const key = target.Resolution + '/' + target.FrameRate + '/' + s.ctx.videoCodecFamily(target.Codecs);
+    s.info.DirectSnapshots[key] = { observed: Date.now(),
+        backup: { type: 'mobile_feed', variant: target, playlist: s.hls.parse(live(100, 'old', 14), BASE) } };
+    const output = await s.ctx.processM3U8(BASE, AD, s.realFetch);
+    assert(output.includes('mobile_feed120.ts'));
+    assert(s.requests.some(url => url.includes('/mobile_feed/')));
+});
+test('fresh advancing warm media avoids a redundant foreground search', async () => {
+    const s = setup();
+    const key = target.Resolution + '/' + target.FrameRate + '/' + s.ctx.videoCodecFamily(target.Codecs);
+    s.info.DirectSnapshots[key] = { observed: Date.now(),
+        backup: { type: 'popout', variant: target, playlist: s.hls.parse(live(120, 'warm', 14), BASE) } };
+    const output = await s.ctx.processM3U8(BASE, AD, s.realFetch);
+    assert(output.includes('warm120.ts'));
+    assert.equal(s.requests.length, 0);
+});
+test('backup media bypasses HTTP caches while retaining request cancellation', async () => {
+    const s = setup(); let options;
+    const abort = new AbortController();
+    await s.ctx.fetchBackupText(async (url, init) => { options = init; return new Response('live'); }, BASE, 100,
+        { signal: abort.signal, credentials: 'omit', cache: 'force-cache' });
+    assert.equal(options.cache, 'no-store');
+    assert.equal(options.credentials, 'omit');
+    assert(options.signal instanceof AbortSignal);
+});
+function latencySetup() {
+    let time = 1000, channel = 'test', enabled = true;
+    const status = { channel, updatedAt: time, playlist: 'replaced' };
+    const handlers = new Map();
+    let ranges = [[0, 17]];
+    const video = { currentTime: 10, readyState: 4, playbackRate: 1, paused: false, seeking: false, ended: false,
+        buffered: { get length() { return ranges.length; }, start: i => ranges[i][0], end: i => ranges[i][1] },
+        addEventListener: (event, fn) => handlers.set(event, fn), removeEventListener: event => handlers.delete(event) };
+    const ctx = vm.createContext({ Date, Math, Number });
+    vm.runInContext(fn('createDirectLatencyController'), ctx);
+    let selectedVideo = video;
+    const controller = ctx.createDirectLatencyController({ getVideo: () => selectedVideo, getStatus: () => status,
+        getChannel: () => channel, enabled: () => enabled, now: () => time });
+    return { controller, video, status, handlers, ranges: value => { ranges = value; },
+        time: value => { time = value; }, channel: value => { channel = value; }, enabled: value => { enabled = value; },
+        selectedVideo: value => { selectedVideo = value; } };
+}
+test('catch-up consumes excess buffered video gradually and keeps a playable reserve', () => {
+    const s = latencySetup(); s.controller.tick();
+    assert.equal(s.video.playbackRate, 1.08);
+    assert.equal(s.video.currentTime, 10); // No seek or skipped video.
+    s.ranges([[0, 14]]); s.controller.tick(); assert.equal(s.video.playbackRate, 1.05);
+    s.ranges([[0, 12]]); s.controller.tick(); assert.equal(s.video.playbackRate, 1);
+    assert.equal(s.status.catchUp.bufferedAheadSeconds, 2);
+});
+test('catch-up stops immediately on a stall or user pause and respects low readyState', () => {
+    const s = latencySetup(); s.controller.tick();
+    s.handlers.get('waiting')(); assert.equal(s.video.playbackRate, 1);
+    s.time(7000); s.status.updatedAt = 7000; s.video.readyState = 2;
+    s.controller.tick(); assert.equal(s.video.playbackRate, 1);
+    s.video.readyState = 4; s.controller.tick(); assert.equal(s.video.playbackRate, 1.08);
+    s.video.paused = true; s.handlers.get('pause')(); s.controller.tick();
+    assert.equal(s.video.playbackRate, 1); assert.equal(s.video.paused, true);
+});
+test('catch-up yields to other speed controls and leaves manual speed intact on navigation', () => {
+    const s = latencySetup(); s.controller.tick(); s.video.playbackRate = 1.5; s.controller.tick();
+    assert.equal(s.video.playbackRate, 1.5);
+    s.video.playbackRate = 1; s.time(2000); s.status.updatedAt = 2000; s.controller.tick();
+    assert.equal(s.video.playbackRate, 1);
+    s.video.playbackRate = 1.5; s.channel('different'); s.controller.tick();
+    assert.equal(s.video.playbackRate, 1.5);
+});
+test('catch-up ignores disjoint future ranges, stale status, and explicit opt-out', () => {
+    const s = latencySetup(); s.ranges([[0, 12], [40, 50]]); s.controller.tick();
+    assert.equal(s.video.playbackRate, 1);
+    s.ranges([[0, 17]]); s.time(10000); s.controller.tick(); assert.equal(s.video.playbackRate, 1);
+    s.status.updatedAt = 10000; s.enabled(false); s.controller.tick(); assert.equal(s.video.playbackRate, 1);
+});
+test('catch-up expires after returning to native and restores a replaced video element', () => {
+    const s = latencySetup(); s.controller.tick(); s.status.playlist = 'native';
+    s.time(3000); s.status.updatedAt = 3000; s.controller.tick(); assert.equal(s.video.playbackRate, 1.08);
+    s.selectedVideo(null); s.controller.tick(); assert.equal(s.video.playbackRate, 1);
+    s.selectedVideo(s.video); s.time(50000); s.status.updatedAt = 50000; s.controller.tick();
+    assert.equal(s.video.playbackRate, 1);
 });

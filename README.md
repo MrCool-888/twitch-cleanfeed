@@ -10,7 +10,7 @@ A browser userscript that tries to block Twitch ads while keeping stream quality
 2. Click **Install the script** above, then confirm installation in your extension.
 3. Disable other Twitch ad-blocking userscripts and refresh Twitch.
 
-If the link shows code, copy the entire file into a new Violentmonkey script and save it. Install version 1.1.1 once to enable link-based updates. Keep automatic updates enabled in Violentmonkey; it will check this same link for newer versions. You can also check for updates from its dashboard.
+If the link shows code, copy the entire file into a new Violentmonkey script and save it. Install version 1.1.2 once to enable link-based updates. Keep automatic updates enabled in Violentmonkey; it will check this same link for newer versions. You can also check for updates from its dashboard.
 
 ## What to expect
 
@@ -67,12 +67,24 @@ localStorage.removeItem('twitchDirect_allowNativeAds');
 
 - Direct backup sessions use `mobile_feed` on the Android platform and `popout` on the web platform. `autoplay` is probed alongside them as a last-resort candidate; a compatible full-quality source is preferred over it. This prevents slow source probes from consuming the entire search budget before autoplay is tried.
 - Resolution, frame rate, and codec matching guide selection. The native quality ladder remains intact; compatible lower quality may be used if full quality is unavailable. The script cannot force a rendition that Twitch does not supply.
-- Warm backup polling runs roughly every two seconds after each probe finishes, while the session is active. Snapshots expire after eight seconds. Searches have a 2.2-second budget and bounded requests.
+- Warm backup polling runs roughly every two seconds after each probe finishes, while the session is active. Cached media is reused only if it is at most 750 ms old and adds a newer broadcast segment; otherwise the current media is refreshed. Backup requests bypass HTTP caches. Searches have a 2.2-second budget and bounded requests.
 - One forward-moving broadcast sequence/timestamp timeline governs source switching. Published URLs stay stable and source/map changes receive HLS discontinuities. Ad transitions do not force player reloads or insert empty video segments.
 - GraphQL header capture now handles `Request` objects and seeds newly created workers with previously captured headers. Native request objects still pass through unchanged.
 - Twitch's browser client-ad refusal hook is checked again after success so it can recover if Twitch resets its manager. A declined hook is not proof that every client ad was prevented.
 
 To disable the potentially low-quality autoplay candidate, set `twitchAdSolutions_preferLowQualityBackup` to `'false'` in Twitch's localStorage and refresh. To restore it, remove that key. This preference carries over from older custom scripts.
+
+### Live delay (v1.1.2)
+
+Replacement feeds can already be behind Twitch’s native feed. A total delay of 4–7 seconds in 7TV does not mean the script added that much delay. This release reduces avoidable delay from stale cached media and excess buffered video; it cannot remove upstream delivery delay.
+
+After a clean ad replacement, gentle catch-up uses 1.05–1.08× playback when at least 3.5 seconds of contiguous video is buffered. It returns to normal speed at 2.5 seconds of buffered video, and stops on a stall, pause, seek, stale playback status, or channel change. It yields to other playback-speed controls and does not seek or reload the player. Catch-up can continue for up to 45 seconds after native playback returns. It respects an explicitly disabled Twitch low-latency setting.
+
+`window.twitchDirectStatus().catchUp` reports the controller state and `bufferedAheadSeconds`. That value measures playable buffer ahead of the current position, not the broadcaster delay shown by 7TV.
+
+To disable this script’s catch-up, run `localStorage.setItem('twitchDirect_catchUp', 'false')` on Twitch. Remove that key to enable it again.
+
+Regression tests cover stale/non-advancing media refresh, cache bypass, playable buffer reserves, interruption, speed ownership, disjoint buffer ranges, stale status, opt-out, and recovery to native playback. Actual 7TV delay during browser ad breaks remains unverified.
 
 ### Status and diagnostics
 
@@ -86,11 +98,11 @@ The result includes version, strict mode, playlist outcome, backup context/quali
 
 The banner shows **checking replacement streams**, **ad playlist replaced** with context and quality, or **ads withheld** while waiting. Under the optional native-ad policy, it may report **no clean replacement; native playback**. It hides when clean native playback returns or playlist updates stop. Selecting a clean playlist does not by itself prove that the video decoded successfully.
 
-If `twitchDirectStatus is not a function`, first verify version 1.1.1 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
+If `twitchDirectStatus is not a function`, first verify version 1.1.2 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
 
 ### Validation
 
-43 automated tests passed with Node.js 24. Coverage includes the generic-trigger regression, actual ad attributes, backup selection and deadlines, autoplay budget access, strict waiting and timeout/cancellation, unsupported ad playlists, native recovery, forward/stable HLS timelines, header capture, client-ad rechecks, whole-script startup, and generated-worker initialization.
+52 automated tests passed with Node.js 24. Coverage includes the generic-trigger regression, actual ad attributes, backup selection and deadlines, autoplay budget access, strict waiting and timeout/cancellation, unsupported ad playlists, native recovery, forward/stable HLS timelines, header capture, client-ad rechecks, whole-script startup, and generated-worker initialization.
 
 Read-only network requests obtained HTTP 200 token, master, and media responses for Dantes in all three contexts. The sampled renditions were 284x160 (`mobile_feed`), 1280x720 (`popout`), and 640x360 (`autoplay`); these samples are not claims about the full available quality ladders. The fixed parser accepted each captured playlist. No video segments were downloaded, and actual browser playback/ad-break success remains unverified.
 
