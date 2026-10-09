@@ -131,6 +131,6 @@ GPL version 3 applies to this adaptation. Retain LICENSE, NOTICE, and TwitchAdBl
 
 Licensed under [GPL-3.0](./LICENSE). Upstream credits and license notices are in [NOTICE](./NOTICE).
 
-## Vibe-coded disclaimer
+## Disclaimer
 
-This project was built with AI assistance (“vibe coded”). It has automated tests, but real-world Twitch ad blocking has not been fully verified. Bugs, missed ads, lower quality, or buffering are possible. It is an independent project, not affiliated with Twitch or the upstream projects.
+This project was built with AI assistance. It has automated tests, but real-world Twitch ad blocking has not been fully verified. Bugs, missed ads, lower quality, or buffering are possible. It is an independent project, not affiliated with Twitch or the upstream projects.
