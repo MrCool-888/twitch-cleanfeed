@@ -488,6 +488,152 @@ test('the complete userscript starts in a browser-like page with no deleted-help
     assert.equal(s.ctx.fetch, installedFetch);
 });
 
+function audioSetup({ savedMute = '{"default":false}', volume = '0.5', playerAvailable = true,
+    rejectAudio = false, storageUnavailable = false, script = source } = {}) {
+    const s = setup(), handlers = new Map(), intervals = new Map(), timeouts = new Map(), calls = [];
+    let id = 0;
+    const storage = new Map([['video-muted', savedMute], ['volume', volume]]);
+    const add = (event, callback) => {
+        if (!handlers.has(event)) handlers.set(event, new Set());
+        handlers.get(event).add(callback);
+    };
+    const remove = (event, callback) => handlers.get(event)?.delete(callback);
+    const video = { dataset: {}, muted: true, paused: false, ended: false, readyState: 4,
+        volume: Number(volume ?? 1), play() {
+            calls.push(this.muted ? 'play-muted' : 'play-audio');
+            return rejectAudio && !this.muted ? Promise.reject(new Error('NotAllowedError')) : Promise.resolve();
+        } };
+    const player = { getHTMLVideoElement: () => video,
+        setMuted: value => { calls.push(['setMuted', value]); video.muted = value; } };
+    s.ctx.localStorage = {
+        getItem: key => { if (storageUnavailable) throw new Error('Storage disabled'); return storage.get(key) ?? null; },
+        setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key)
+    };
+    s.ctx.document = { location: { hostname: 'www.twitch.tv', pathname: '/test' }, readyState: 'loading',
+        addEventListener: add, removeEventListener: remove,
+        querySelector: selector => selector.startsWith('.video-player video') ? video : null };
+    s.ctx.frameElement = null;
+    s.ctx.XMLHttpRequest = class { open() {} };
+    s.ctx.Worker = class Worker {};
+    s.ctx.URL = class extends URL { static createObjectURL() { return 'blob:https://www.twitch.tv/test'; } static revokeObjectURL() {} };
+    s.ctx.fetch = async () => new Response('{}');
+    s.ctx.addEventListener = add; s.ctx.removeEventListener = remove;
+    s.ctx.setInterval = (callback, delay) => { intervals.set(++id, { callback, delay }); return id; };
+    s.ctx.clearInterval = key => intervals.delete(key);
+    s.ctx.setTimeout = (callback, delay) => { timeouts.set(++id, { callback, delay }); return id; };
+    s.ctx.clearTimeout = key => timeouts.delete(key);
+    // Execute actual page startup, but avoid depending on Twitch's React internals in this fixture.
+    const playerLookup = '    function getPlayerAndState() {';
+    const lookupStart = script.indexOf(playerLookup);
+    if (lookupStart >= 0) script = script.slice(0, lookupStart) +
+        '    function getPlayerAndState() { return globalThis.testPlayerState; }' +
+        script.slice(lookupStart + fn('getPlayerAndState').length);
+    s.ctx.testPlayerState = playerAvailable ? { player } : null;
+    vm.runInContext(script, s.ctx);
+    return { ...s, storage, video, calls, intervals, timeouts,
+        emit: async (event, props = {}) => {
+            for (const callback of [...(handlers.get(event) || [])]) await callback({ target: video, ...props });
+        },
+        poll: async () => {
+            for (const { callback, delay } of [...intervals.values()]) if (delay === 500) await callback();
+        },
+        pending: () => handlers.get('playing')?.size || 0 };
+}
+
+test('page refresh restores saved audible playback after Twitch starts muted', async () => {
+    const s = audioSetup();
+    // Twitch can persist its autoplay mute after the document-start snapshot.
+    s.storage.set('video-muted', '{"default":true}');
+    await s.emit('playing');
+    assert.equal(s.video.muted, false);
+    assert.equal(s.storage.get('video-muted'), '{"default":false}');
+    assert.deepEqual(s.calls, [['setMuted', false], 'play-audio']);
+    assert.equal(s.pending(), 0);
+    assert(![...s.intervals.values()].some(timer => timer.delay === 500));
+    s.video.muted = true;
+    await s.emit('playing'); await s.poll();
+    assert.equal(s.video.muted, true); // Later manual mutes are never undone.
+});
+
+test('startup audio restoration waits for playable media and handles late player mounting', async () => {
+    const s = audioSetup({ playerAvailable: false });
+    s.video.paused = true; await s.emit('playing');
+    assert.equal(s.video.muted, true);
+    s.video.paused = false; s.video.readyState = 1; await s.poll();
+    assert.equal(s.video.muted, true);
+    s.video.readyState = 4; await s.poll();
+    assert.equal(s.video.muted, false);
+    assert.deepEqual(s.calls, ['play-audio']);
+});
+
+test('saved mute, zero volume, missing/invalid preferences and unavailable storage stay untouched', async () => {
+    for (const options of [{ savedMute: '{"default":true}' }, { volume: '0' }, { volume: '0.0' },
+        { savedMute: null }, { savedMute: 'bad-json' }, { storageUnavailable: true }]) {
+        const s = audioSetup(options); await s.emit('playing'); await s.poll();
+        assert.equal(s.video.muted, true);
+        assert.deepEqual(s.calls, []);
+    }
+    const s = audioSetup(); s.video.volume = 0;
+    await s.emit('playing'); assert.equal(s.video.muted, true);
+});
+
+test('trusted mute controls cancel startup recovery while synthetic events do not', async () => {
+    for (const event of ['pointerdown', 'keydown']) {
+        const s = audioSetup(); await s.emit(event, { isTrusted: true });
+        await s.emit('playing'); await s.poll();
+        assert.equal(s.video.muted, true);
+        assert.deepEqual(s.calls, []);
+    }
+    const s = audioSetup(); await s.emit('pointerdown', { isTrusted: false });
+    await s.emit('playing'); assert.equal(s.video.muted, false);
+});
+
+test('browser denial resumes muted playback once without a retry loop', async () => {
+    const s = audioSetup({ rejectAudio: true }); await s.emit('playing');
+    assert.equal(s.video.muted, true);
+    assert.deepEqual(s.calls, [['setMuted', false], 'play-audio', ['setMuted', true], 'play-muted']);
+    await s.emit('playing'); await s.poll();
+    assert.equal(s.calls.length, 4);
+});
+
+test('manual input during an autoplay rejection prevents delayed audio changes', async () => {
+    const s = audioSetup(); let reject;
+    s.video.play = () => new Promise((resolve, fail) => { reject = fail; });
+    const restoring = s.emit('playing');
+    await s.emit('keydown', { isTrusted: true });
+    s.video.muted = false;
+    reject(new Error('NotAllowedError')); await restoring;
+    assert.equal(s.video.muted, false);
+    assert.deepEqual(s.calls, [['setMuted', false]]);
+});
+
+test('startup recovery targets the player-owned video and skips marked ad elements', async () => {
+    const s = audioSetup();
+    const ad = { ...s.video, muted: true };
+    s.ctx.document.querySelector = () => ad;
+    await s.emit('playing');
+    assert.equal(s.video.muted, false);
+    assert.equal(ad.muted, true);
+    const fallback = audioSetup({ playerAvailable: false });
+    fallback.video.dataset.tasAdHidden = '1';
+    await fallback.emit('playing');
+    assert.equal(fallback.video.muted, true);
+    assert.deepEqual(fallback.calls, []);
+});
+
+test('startup recovery expires and stops on navigation or pagehide', async () => {
+    for (const reason of ['timeout', 'navigation', 'pagehide']) {
+        const s = audioSetup();
+        if (reason === 'timeout') [...s.timeouts.values()].find(timer => timer.delay === 105000).callback();
+        if (reason === 'navigation') s.ctx.document.location.pathname = '/different';
+        if (reason === 'pagehide') await s.emit('pagehide');
+        await s.emit('playing'); await s.poll();
+        assert.equal(s.video.muted, true);
+        assert.deepEqual(s.calls, []);
+        assert.equal(s.pending(), 0);
+    }
+});
+
 test('an aged warm playlist cannot suppress a fresh foreground media request', async () => {
     const s = setup({ mobile_feed: { clean: true, seq: 120 } });
     // Use the implementation's codec family to avoid fixture assumptions.

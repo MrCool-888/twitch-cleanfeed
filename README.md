@@ -10,13 +10,15 @@ A browser userscript that tries to block Twitch ads while keeping stream quality
 2. Click **Install the script** above, then confirm installation in your extension.
 3. Disable other Twitch ad-blocking userscripts and refresh Twitch.
 
-Already using Twitch Direct Session? Choose **Check for updates** for the existing script in Violentmonkey, then refresh Twitch. It will become **Twitch CleanFeed v1.1.5**. Keep automatic updates enabled. If you install a new copy using the link instead, disable the old copy to avoid running both. If the link only shows code, replace the entire source of your existing script and save it.
+Already using Twitch Direct Session? Choose **Check for updates** for the existing script in Violentmonkey, then refresh Twitch. It will become **Twitch CleanFeed v1.1.6**. Keep automatic updates enabled. If you install a new copy using the link instead, disable the old copy to avoid running both. If the link only shows code, replace the entire source of your existing script and save it.
 
 ## What to expect
 
 - Tries to find an ad-free stream at the closest available quality.
 - Shows a status message when replacing ads or waiting for clean content. Click the white **CleanFeed toggle** in the bottom-right player controls to show or hide it. No slash means **On**; a slash means **Off**. Your choice is saved.
 - If no clean stream is available, playback may pause or buffer. Some ads may still get through; this is experimental.
+
+Version 1.1.6 restores your saved unmuted setting if Twitch starts the stream muted after a page refresh. Saved mute and zero-volume settings are respected. Recovery runs only during startup, waits for playback, and yields to mouse/touch or keyboard input. If your browser denies audible autoplay, playback continues muted and you can unmute normally. Live Helium verification is pending.
 
 Need help or want the technical details? Expand the guide below.
 
@@ -104,11 +106,11 @@ The result includes version, strict mode, playlist outcome, backup context/quali
 
 The banner shows **checking replacement streams**, **ad playlist replaced** with context and quality, or **ads withheld** while waiting. Under the optional native-ad policy, it may report **no clean replacement; native playback**. It hides when clean native playback returns or playlist updates stop. Selecting a clean playlist does not by itself prove that the video decoded successfully.
 
-If `twitchCleanFeedStatus is not a function`, first verify version 1.1.5 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
+If `twitchCleanFeedStatus is not a function`, first verify version 1.1.6 is installed and enabled, refresh, and select the main page console context. Violentmonkey's generic **Syntax error?** warning can also indicate an injection failure; see the [maintainer's explanation](https://github.com/violentmonkey/violentmonkey/discussions/1744). Errors for blocked analytics/tracking requests do not establish that stream ads were blocked.
 
 ### Validation
 
-52 automated tests passed with Node.js 24. The direct toggle was also checked in a local browser player preview for mouse/keyboard operation, saved preferences, expired status, and player/control replacement. Live Twitch control layout remains unverified. Coverage includes the generic-trigger regression, actual ad attributes, backup selection and deadlines, autoplay budget access, strict waiting and timeout/cancellation, unsupported ad playlists, native recovery, forward/stable HLS timelines, header capture, client-ad rechecks, whole-script startup, and generated-worker initialization.
+60 automated tests passed with Node.js 24, including page-refresh audio restoration, saved mute/zero volume, manual input, autoplay rejection, and cleanup. The direct toggle was previously checked in a local browser player preview for mouse/keyboard operation, saved preferences, expired status, and player/control replacement. Live Twitch control layout remains unverified. Coverage includes the generic-trigger regression, actual ad attributes, backup selection and deadlines, autoplay budget access, strict waiting and timeout/cancellation, unsupported ad playlists, native recovery, forward/stable HLS timelines, header capture, client-ad rechecks, whole-script startup, and generated-worker initialization.
 
 Read-only network requests obtained HTTP 200 token, master, and media responses for Dantes in all three contexts. The sampled renditions were 284x160 (`mobile_feed`), 1280x720 (`popout`), and 640x360 (`autoplay`); these samples are not claims about the full available quality ladders. The fixed parser accepted each captured playlist. No video segments were downloaded, and actual browser playback/ad-break success remains unverified.
 

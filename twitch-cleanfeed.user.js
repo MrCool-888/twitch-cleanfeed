@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitch CleanFeed
 // @namespace    twitch-direct-session-browser-port
-// @version      1.1.5
+// @version      1.1.6
 // @downloadURL  https://raw.githubusercontent.com/MrCool-888/twitch-cleanfeed/main/twitch-cleanfeed.user.js
 // @updateURL    https://raw.githubusercontent.com/MrCool-888/twitch-cleanfeed/main/twitch-cleanfeed.user.js
 // @homepageURL  https://github.com/MrCool-888/twitch-cleanfeed
@@ -65,7 +65,7 @@
         return;
     }
     window.twitchAdSolutionsVersion = ourTwitchAdSolutionsVersion;
-    const directAdStatus = { version: '1.1.5', playlist: 'waiting', clientAdGate: 'checking',
+    const directAdStatus = { version: '1.1.6', playlist: 'waiting', clientAdGate: 'checking',
         channel: null, context: null, resolution: null, frameRate: null, reason: null, updatedAt: null };
     let directAdBannerTimer = null;
     window.twitchCleanFeedStatus = () => ({ ...directAdStatus, probes: { ...directAdStatus.probes } });
@@ -2265,6 +2265,64 @@
             return realFetch.apply(this, arguments);
         }, 'fetch');
     }
+    function startDirectAudioRestore() {
+        // Capture intent at document-start, before Twitch's autoplay fallback can persist a mute.
+        let savedMute;
+        try {
+            savedMute = localStorage.getItem('video-muted');
+            const volume = localStorage.getItem('volume');
+            if (JSON.parse(savedMute)?.default !== false ||
+                (volume !== null && Number(volume) === 0)) return;
+        } catch { return; }
+        const initialPath = document.location.pathname;
+        let stopped = false, restoring = false;
+        let poll, timeout;
+        const stop = () => {
+            stopped = true;
+            clearInterval(poll);
+            clearTimeout(timeout);
+            document.removeEventListener('playing', restore, true);
+            document.removeEventListener('pointerdown', onInput, true);
+            document.removeEventListener('keydown', onInput, true);
+            window.removeEventListener('pagehide', stop);
+        };
+        const onInput = event => { if (event.isTrusted) stop(); };
+        const restore = async () => {
+            if (stopped || restoring) return;
+            if (document.location.pathname !== initialPath) { stop(); return; }
+            let player, video;
+            try {
+                player = getPlayerAndState()?.player;
+                video = player?.getHTMLVideoElement?.() ||
+                    document.querySelector('.video-player video:not([data-tas-ad-hidden])');
+                if (!video || video.dataset.tasAdHidden || !video.muted || video.paused ||
+                    video.ended || video.readyState < 2 || video.volume === 0) return;
+                restoring = true;
+                player?.setMuted?.(false);
+                video.muted = false;
+                await video.play();
+                if (!stopped) {
+                    try { localStorage.setItem('video-muted', savedMute); } catch {}
+                }
+            } catch {
+                // Audible autoplay can be denied; keep the stream playing rather than retrying.
+                if (!stopped && restoring) {
+                    try {
+                        player?.setMuted?.(true);
+                        video.muted = true;
+                        video.play()?.catch?.(() => {});
+                    } catch {}
+                }
+            }
+            if (restoring) stop();
+        };
+        document.addEventListener('playing', restore, true);
+        document.addEventListener('pointerdown', onInput, true);
+        document.addEventListener('keydown', onInput, true);
+        window.addEventListener('pagehide', stop);
+        poll = setInterval(restore, 500);
+        timeout = setTimeout(stop, StrictAdWaitLimitMs + 15000);
+    }
     // Set up visibility overrides and localStorage hooks to preserve player state across reloads
     function onContentLoaded() {
         if (document.getElementById('seventv-extension')) {
@@ -2415,6 +2473,7 @@
         }
         return realXHROpen.apply(this, arguments);
     }, 'open');
+    startDirectAudioRestore();
     startBrowserClientAdBlock();
     startDirectLatencyControl();
     startDirectBannerControls();
