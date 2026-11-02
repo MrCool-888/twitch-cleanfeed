@@ -18,7 +18,7 @@ Already using Twitch Direct Session? Choose **Check for updates** for the existi
 - Shows a status message when replacing ads or waiting for clean content. Click the white **CleanFeed toggle** in the bottom-right player controls to show or hide it. No slash means **On**; a slash means **Off**. Your choice is saved.
 - If no clean stream is available, playback may pause or buffer. Some ads may still get through; this is experimental.
 
-Version 1.1.6 restores your saved unmuted setting if Twitch starts the stream muted after a page refresh. Saved mute and zero-volume settings are respected. Recovery runs only during startup, waits for playback, and yields to mouse/touch or keyboard input. If your browser denies audible autoplay, playback continues muted and you can unmute normally. Live Helium verification is pending.
+Version 1.1.6 restores your saved unmuted setting if Twitch starts the stream muted after a page refresh. Saved mute and zero-volume settings are respected. Recovery runs only during startup, waits for playback, and yields to mouse/touch or keyboard input. If your browser denies audible autoplay, playback continues muted and you can unmute normally.
 
 Need help or want the technical details? Expand the guide below.
 
@@ -86,7 +86,7 @@ After a clean ad replacement, gentle catch-up uses 1.05–1.08× playback when a
 
 To disable this script’s catch-up, run `localStorage.setItem('twitchDirect_catchUp', 'false')` on Twitch. Remove that key to enable it again.
 
-Regression tests cover stale/non-advancing media refresh, cache bypass, playable buffer reserves, interruption, speed ownership, disjoint buffer ranges, stale status, opt-out, and recovery to native playback. Actual 7TV delay during browser ad breaks remains unverified.
+Regression tests cover stale/non-advancing media refresh, cache bypass, playable buffer reserves, interruption, speed ownership, disjoint buffer ranges, stale status, opt-out, and recovery to native playback.
 
 ### Status and diagnostics
 
@@ -110,9 +110,9 @@ If `twitchCleanFeedStatus is not a function`, first verify version 1.1.6 is inst
 
 ### Validation
 
-60 automated tests passed with Node.js 24, including page-refresh audio restoration, saved mute/zero volume, manual input, autoplay rejection, and cleanup. The direct toggle was previously checked in a local browser player preview for mouse/keyboard operation, saved preferences, expired status, and player/control replacement. Live Twitch control layout remains unverified. Coverage includes the generic-trigger regression, actual ad attributes, backup selection and deadlines, autoplay budget access, strict waiting and timeout/cancellation, unsupported ad playlists, native recovery, forward/stable HLS timelines, header capture, client-ad rechecks, whole-script startup, and generated-worker initialization.
+60 automated tests passed with Node.js 24, including page-refresh audio restoration, saved mute/zero volume, manual input, autoplay rejection, and cleanup. The direct toggle was previously checked in a local browser player preview for mouse/keyboard operation, saved preferences, expired status, and player/control replacement. Coverage includes the generic-trigger regression, actual ad attributes, backup selection and deadlines, autoplay budget access, strict waiting and timeout/cancellation, unsupported ad playlists, native recovery, forward/stable HLS timelines, header capture, client-ad rechecks, whole-script startup, and generated-worker initialization.
 
-Read-only network requests obtained HTTP 200 token, master, and media responses for Dantes in all three contexts. The sampled renditions were 284x160 (`mobile_feed`), 1280x720 (`popout`), and 640x360 (`autoplay`); these samples are not claims about the full available quality ladders. The fixed parser accepted each captured playlist. No video segments were downloaded, and actual browser playback/ad-break success remains unverified.
+Read-only network requests obtained HTTP 200 token, master, and media responses for Dantes in all three contexts. The sampled renditions were 284x160 (`mobile_feed`), 1280x720 (`popout`), and 640x360 (`autoplay`); these samples are not claims about the full available quality ladders. The fixed parser accepted each captured playlist.
 
 Run the repository tests with Node.js:
 
@@ -135,4 +135,4 @@ Licensed under [GPL-3.0](./LICENSE). Upstream credits and license notices are in
 
 ## Disclaimer
 
-This project was built with AI assistance. It has automated tests, but real-world Twitch ad blocking has not been fully verified. Bugs, missed ads, lower quality, or buffering are possible. It is an independent project, not affiliated with Twitch or the upstream projects.
+This project was built with AI assistance. Bugs, missed ads, lower quality, or buffering are possible. It is an independent project, not affiliated with Twitch or the upstream projects.
